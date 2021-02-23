@@ -34,36 +34,36 @@ static NSTimeInterval seekTimerPeriod = 1.0;
     [self.player play];
 
     __weak __typeof(self) weakSelf = self;
-      MPRemoteCommandCenter *commandCenter = [MPRemoteCommandCenter sharedCommandCenter];
+    MPRemoteCommandCenter *commandCenter = [MPRemoteCommandCenter sharedCommandCenter];
 
-      NSArray *commands = @[commandCenter.playCommand, commandCenter.pauseCommand, commandCenter.nextTrackCommand, commandCenter.previousTrackCommand, commandCenter.bookmarkCommand, commandCenter.changePlaybackPositionCommand, commandCenter.changePlaybackRateCommand, commandCenter.dislikeCommand, commandCenter.enableLanguageOptionCommand, commandCenter.likeCommand, commandCenter.ratingCommand, commandCenter.seekBackwardCommand, commandCenter.seekForwardCommand, commandCenter.skipBackwardCommand, commandCenter.skipForwardCommand, commandCenter.stopCommand, commandCenter.togglePlayPauseCommand];
+    NSArray *commands = @[commandCenter.playCommand, commandCenter.pauseCommand, commandCenter.nextTrackCommand, commandCenter.previousTrackCommand, commandCenter.bookmarkCommand, commandCenter.changePlaybackPositionCommand, commandCenter.changePlaybackRateCommand, commandCenter.dislikeCommand, commandCenter.enableLanguageOptionCommand, commandCenter.likeCommand, commandCenter.ratingCommand, commandCenter.seekBackwardCommand, commandCenter.seekForwardCommand, commandCenter.skipBackwardCommand, commandCenter.skipForwardCommand, commandCenter.stopCommand, commandCenter.togglePlayPauseCommand];
 
-      for (MPRemoteCommand *command in commands) {
-          [command removeTarget:nil];
-          [command setEnabled:NO];
-      }
+    for (MPRemoteCommand *command in commands) {
+        [command removeTarget:nil];
+        [command setEnabled:NO];
+    }
 
-      [commandCenter.changePlaybackPositionCommand addTarget:self action:@selector(setCurrentAudioTimeFromRemote:)];
-      [commandCenter.playCommand addTarget:self action:@selector(playMediaFromRemote)];
-      [commandCenter.pauseCommand addTarget:self action:@selector(pauseMediaFromRemote)];
-      [commandCenter.nextTrackCommand addTarget:self action:@selector(goToNextMediaFromRemote)];
-      [commandCenter.previousTrackCommand addTarget:self action:@selector(goToPreviousMediaFromRemote)];
+    [commandCenter.changePlaybackPositionCommand addTarget:self action:@selector(setCurrentAudioTimeFromRemote:)];
+    [commandCenter.playCommand addTarget:self action:@selector(playMediaFromRemote)];
+    [commandCenter.pauseCommand addTarget:self action:@selector(pauseMediaFromRemote)];
+    [commandCenter.nextTrackCommand addTarget:self action:@selector(goToNextMediaFromRemote)];
+    [commandCenter.previousTrackCommand addTarget:self action:@selector(goToPreviousMediaFromRemote)];
 
-      [commandCenter.seekBackwardCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-          return [weakSelf seekFromRemote:(MPSeekCommandEvent *)event forward:NO];
-      }];
+    [commandCenter.seekBackwardCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        return [weakSelf seekFromRemote:(MPSeekCommandEvent *)event forward:NO];
+    }];
 
-      [commandCenter.seekForwardCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-          return [weakSelf seekFromRemote:(MPSeekCommandEvent *)event forward:YES];
-      }];
+    [commandCenter.seekForwardCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        return [weakSelf seekFromRemote:(MPSeekCommandEvent *)event forward:YES];
+    }];
 
-      commandCenter.previousTrackCommand.enabled = YES;
-      commandCenter.nextTrackCommand.enabled = YES;
-      commandCenter.pauseCommand.enabled = YES;
-      commandCenter.playCommand.enabled = YES;
-      commandCenter.changePlaybackPositionCommand.enabled = YES;
-      commandCenter.seekBackwardCommand.enabled = YES;
-      commandCenter.seekForwardCommand.enabled = YES;
+    commandCenter.previousTrackCommand.enabled = YES;
+    commandCenter.nextTrackCommand.enabled = YES;
+    commandCenter.pauseCommand.enabled = YES;
+    commandCenter.playCommand.enabled = YES;
+    commandCenter.changePlaybackPositionCommand.enabled = YES;
+    commandCenter.seekBackwardCommand.enabled = YES;
+    commandCenter.seekForwardCommand.enabled = YES;
 
     [self updateNowPlaying];
 
@@ -115,8 +115,13 @@ static NSTimeInterval seekTimerPeriod = 1.0;
 }
 
 - (MPRemoteCommandHandlerStatus)seekFromRemote:(MPSeekCommandEvent *)event forward:(BOOL)forward {
+    // If this handler is called while a seekTimer is active, invalidate it.
+    // This ensures the timer is terminated before we attempt to set up a new
+    // one.
     [self.seekTimer invalidate];
     self.seekTimer = nil;
+
+    // Use timers to simulate fast forward/backward functionality.
     if (event.type == MPSeekCommandEventTypeBeginSeeking) {
         if (forward) {
             NSLog(@"Begin Forward Seeking.");
@@ -125,6 +130,8 @@ static NSTimeInterval seekTimerPeriod = 1.0;
                                                             selector:@selector(handleRemoteFastForwardTimer)
                                                             userInfo:nil
                                                              repeats:YES];
+            // Fire the timer immediately so the user isn't left waiting an
+            // extra seekTimerPeriod.
             [self.seekTimer fire];
 
         } else {
@@ -149,11 +156,9 @@ static NSTimeInterval seekTimerPeriod = 1.0;
     [self.player pause];
 
     CMTimeScale timeScale = self.player.currentItem.asset.duration.timescale;
-    // The completion handler runs in the main queue, not the calling queue
-    // queue for the seek action.
 
     [self.player seekToTime:CMTimeMakeWithSeconds(CMTimeGetSeconds(self.player.currentTime) + 15, timeScale)
-               completionHandler:^(BOOL finished) {
+          completionHandler:^(BOOL finished) {
         if (finished) {
             self.player.rate = 1.0;
         }
@@ -168,12 +173,10 @@ static NSTimeInterval seekTimerPeriod = 1.0;
     [self.player pause];
 
     CMTimeScale timeScale = self.player.currentItem.asset.duration.timescale;
-    // The completion handler runs in the main queue, not the calling queue
-    // queue for the seek action.
 
     if (CMTimeGetSeconds(self.player.currentTime) - 15 > 0 ) {
         [self.player seekToTime:CMTimeMakeWithSeconds(CMTimeGetSeconds(self.player.currentTime) - 15, timeScale)
-                   completionHandler:^(BOOL finished) {
+              completionHandler:^(BOOL finished) {
             if (finished) {
                 self.player.rate = 1.0;
             }
@@ -206,8 +209,8 @@ static NSTimeInterval seekTimerPeriod = 1.0;
 
     // Remove the interruption handler.
     [[NSNotificationCenter defaultCenter] removeObserver:self
-                                                 name:AVAudioSessionInterruptionNotification
-                                               object:audioSession];
+                                                    name:AVAudioSessionInterruptionNotification
+                                                  object:audioSession];
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath
